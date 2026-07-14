@@ -3,9 +3,15 @@
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+import uvicorn
 from mcp.server.fastmcp import FastMCP
+from starlette.types import ASGIApp
 
 from trilium_mcp.client import TriliumClient
+from trilium_mcp.cloudflare_access import (
+    CloudflareAccessMiddleware,
+    CloudflareAccessVerifier,
+)
 from trilium_mcp.config import Settings
 from trilium_mcp.tools.branches import register_branch_tools
 from trilium_mcp.tools.notes import register_note_tools
@@ -34,9 +40,25 @@ def create_server(settings: Settings) -> FastMCP:
     return mcp
 
 
+def create_app(settings: Settings) -> ASGIApp:
+    """Build the HTTP application and optionally protect it with Cloudflare Access."""
+    app = create_server(settings).streamable_http_app()
+    if settings.cf_access_enabled:
+        app.add_middleware(
+            CloudflareAccessMiddleware,
+            verifier=CloudflareAccessVerifier(
+                settings.cf_access_team_domain,
+                settings.cf_access_aud,
+                settings.cf_access_allowed_email,
+            ),
+        )
+    return app
+
+
 def main() -> None:
     """Run the server with the Streamable HTTP transport."""
-    create_server(Settings()).run(transport="streamable-http")
+    settings = Settings()
+    uvicorn.run(create_app(settings), host=settings.mcp_host, port=settings.mcp_port)
 
 
 if __name__ == "__main__":

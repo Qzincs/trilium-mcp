@@ -45,6 +45,22 @@ TRILIUM_MAX_CONTENT_CHARS=100000
 
 `TRILIUM_ETAPI_URL` must include the `/etapi` path.
 
+### Cloudflare Access
+
+Set the following values when Cloudflare Access protects the public MCP route:
+
+```env
+MCP_ENVIRONMENT=production
+CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+CF_ACCESS_AUD=your-application-audience-tag
+CF_ACCESS_ALLOWED_EMAIL=you@example.com
+```
+
+`CF_ACCESS_ALLOWED_EMAIL` is optional. With Cloudflare Access configured, requests to `/mcp` must
+include a valid `Cf-Access-Jwt-Assertion`. The server obtains signing keys from Cloudflare's JWKS
+endpoint, accepts only RS256 tokens, validates issuer, audience, expiry and `nbf`, and does not
+log the JWT. In production, `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are required.
+
 ## Run
 
 Install dependencies and start the MCP server:

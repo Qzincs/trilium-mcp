@@ -765,6 +765,8 @@ source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -778,6 +780,8 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.28.1,<2" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10,<3" },
+    { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
 
 [package.metadata.requires-dev]
