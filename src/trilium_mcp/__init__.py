@@ -1,0 +1,1 @@
+"""TriliumNext MCP server package."""
