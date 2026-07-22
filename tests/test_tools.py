@@ -16,9 +16,11 @@ from trilium_mcp.tools.notes import (
     create_note_tool,
     edit_note_content_tool,
     find_in_note_tool,
+    get_day_note_tool,
     get_note_content_tool,
     get_note_tool,
     get_recent_notes_tool,
+    get_week_note_tool,
     move_note_tool,
     rename_note_tool,
     replace_note_content_tool,
@@ -150,6 +152,89 @@ async def test_get_note_returns_metadata_without_requesting_content() -> None:
     assert content["content"] == "abcde"
     assert content["blob_id"] == "b1"
     assert content["truncated"] is True
+
+
+@pytest.mark.anyio
+async def test_get_day_note_returns_existing_note_or_requires_creation_confirmation() -> None:
+    client = FakeClient()
+
+    async def existing_day_note(**kwargs: Any) -> list[dict[str, str]]:
+        client.search_calls.append(kwargs)
+        return [{"noteId": "day-note"}]
+
+    client.search_notes = existing_day_note  # type: ignore[method-assign]
+
+    existing = await get_day_note_tool(client, date="2026-07-22")
+
+    assert existing == {
+        "date": "2026-07-22",
+        "created": False,
+        "note": {
+            "noteId": "day-note",
+            "title": "First",
+            "type": "text",
+            "mime": None,
+            "dateCreated": None,
+            "dateModified": None,
+            "isArchived": None,
+            "blobId": "b1",
+        },
+    }
+    assert client.search_calls[-1] == {
+        "query": "#dateNote = '2026-07-22'",
+        "limit": 2,
+    }
+
+    client.search_notes = lambda **kwargs: async_value([])  # type: ignore[method-assign]
+    with pytest.raises(TriliumWriteConfirmationRequired, match="confirm_create"):
+        await get_day_note_tool(client, date="2026-07-23")
+
+    created_dates: list[str] = []
+
+    async def create_day_note(date: str) -> dict[str, Any]:
+        created_dates.append(date)
+        return {"noteId": "new-day", "title": "23 - Thursday", "type": "text", "blobId": "b2"}
+
+    client.get_day_note = create_day_note  # type: ignore[method-assign]
+    created = await get_day_note_tool(client, date="2026-07-23", confirm_create=True)
+
+    assert created["created"] is True
+    assert created["note"]["noteId"] == "new-day"
+    assert created_dates == ["2026-07-23"]
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        await get_day_note_tool(client, date="2026/07/23")
+
+
+@pytest.mark.anyio
+async def test_get_week_note_returns_existing_note_or_requires_creation_confirmation() -> None:
+    client = FakeClient()
+
+    async def existing_week_note(**kwargs: Any) -> list[dict[str, str]]:
+        client.search_calls.append(kwargs)
+        return [{"noteId": "week-note"}]
+
+    client.search_notes = existing_week_note  # type: ignore[method-assign]
+    existing = await get_week_note_tool(client, week="2026-W30")
+
+    assert existing["week"] == "2026-W30"
+    assert existing["created"] is False
+    assert existing["note"]["noteId"] == "week-note"
+    assert client.search_calls[-1] == {"query": "#weekNote = '2026-W30'", "limit": 2}
+
+    client.search_notes = lambda **kwargs: async_value([])  # type: ignore[method-assign]
+    with pytest.raises(TriliumWriteConfirmationRequired, match="confirm_create"):
+        await get_week_note_tool(client, week="2026-W31")
+
+    async def create_week_note(week: str) -> dict[str, Any]:
+        return {"noteId": "new-week", "title": "Week 31", "type": "text", "blobId": "b2"}
+
+    client.get_week_note = create_week_note  # type: ignore[method-assign]
+    created = await get_week_note_tool(client, week="2026-W31", confirm_create=True)
+
+    assert created["created"] is True
+    assert created["note"]["noteId"] == "new-week"
+    with pytest.raises(ValueError, match="YYYY-Www"):
+        await get_week_note_tool(client, week="2026-W54")
 
 
 @pytest.mark.anyio
@@ -518,6 +603,8 @@ async def test_tool_annotations_distinguish_reads_and_writes() -> None:
     assert {tool.name for tool in tools} == {
         "search_notes",
         "get_note",
+        "get_day_note",
+        "get_week_note",
         "get_note_content",
         "list_note_children",
         "get_recent_notes",
@@ -544,7 +631,7 @@ async def test_tool_annotations_distinguish_reads_and_writes() -> None:
         elif tool.name == "append_note":
             assert tool.annotations.readOnlyHint is False
             assert tool.annotations.destructiveHint is False
-        elif tool.name == "create_note":
+        elif tool.name in {"create_note", "get_day_note", "get_week_note"}:
             assert tool.annotations.readOnlyHint is False
             assert tool.annotations.destructiveHint is False
         else:

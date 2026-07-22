@@ -112,6 +112,8 @@ Read tools:
 
 - `search_notes` — search notes by title, content, or ETAPI search syntax; returns metadata only.
 - `get_note` — fetch note metadata, including parent and child branch IDs.
+- `get_day_note` — get one date's default-calendar day note; creates it only with confirmation.
+- `get_week_note` — get one ISO week's default-calendar week note; creates it only with confirmation.
 - `get_note_content` — read raw note content with optional character-based pagination.
 - `find_in_note` — find literal text in a note body and return offsets plus context.
 - `get_recent_notes` — list recently modified notes.

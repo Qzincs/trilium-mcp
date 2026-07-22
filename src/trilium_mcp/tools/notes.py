@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from datetime import date as Date
+from datetime import datetime
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -78,6 +80,88 @@ async def get_note_tool(
     metadata["parentBranchIds"] = note.get("parentBranchIds", [])
     metadata["childBranchIds"] = note.get("childBranchIds", [])
     return {"note": metadata}
+
+
+async def get_day_note_tool(
+    client: TriliumClient, *, date: str | None = None, confirm_create: bool = False
+) -> dict[str, Any]:
+    """Get one day note, only using the creating endpoint after confirmation."""
+    target_date = Date.today() if date is None else parse_day_note_date(date)
+    date_value = target_date.isoformat()
+    matches = await client.search_notes(
+        query=f"#dateNote = '{date_value}'",
+        limit=2,
+    )
+    if len(matches) > 1:
+        raise TriliumAPIError("Trilium returned multiple day notes for the requested date.")
+    if matches:
+        note_id = matches[0].get("noteId")
+        if not isinstance(note_id, str):
+            raise TriliumAPIError("Trilium returned an invalid day note search response.")
+        return {
+            "date": date_value,
+            "created": False,
+            "note": note_summary(await client.get_note(note_id)),
+        }
+    if not confirm_create:
+        raise TriliumWriteConfirmationRequired(
+            "No day note exists for this date. Retry with confirm_create=true to create it."
+        )
+    return {
+        "date": date_value,
+        "created": True,
+        "note": note_summary(await client.get_day_note(date_value)),
+    }
+
+
+async def get_week_note_tool(
+    client: TriliumClient, *, week: str | None = None, confirm_create: bool = False
+) -> dict[str, Any]:
+    """Get one ISO week note, only using the creating endpoint after confirmation."""
+    week_value = current_iso_week() if week is None else parse_iso_week(week)
+    matches = await client.search_notes(
+        query=f"#weekNote = '{week_value}'",
+        limit=2,
+    )
+    if len(matches) > 1:
+        raise TriliumAPIError("Trilium returned multiple week notes for the requested week.")
+    if matches:
+        note_id = matches[0].get("noteId")
+        if not isinstance(note_id, str):
+            raise TriliumAPIError("Trilium returned an invalid week note search response.")
+        return {
+            "week": week_value,
+            "created": False,
+            "note": note_summary(await client.get_note(note_id)),
+        }
+    if not confirm_create:
+        raise TriliumWriteConfirmationRequired(
+            "No week note exists for this week. Retry with confirm_create=true to create it."
+        )
+    return {
+        "week": week_value,
+        "created": True,
+        "note": note_summary(await client.get_week_note(week_value)),
+    }
+
+
+def parse_day_note_date(value: str) -> Date:
+    try:
+        return Date.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError("date must use YYYY-MM-DD format.") from error
+
+
+def current_iso_week() -> str:
+    iso_year, iso_week, _ = Date.today().isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
+def parse_iso_week(value: str) -> str:
+    try:
+        return datetime.strptime(f"{value}-1", "%G-W%V-%u").strftime("%G-W%V")
+    except ValueError as error:
+        raise ValueError("week must use ISO YYYY-Www format.") from error
 
 
 async def get_note_content_tool(
@@ -427,6 +511,43 @@ def register_note_tools(mcp: FastMCP, client: TriliumClient, settings: Settings)
     )
     async def get_note(note_id: str) -> dict[str, Any]:
         return await get_note_tool(client, note_id=note_id)
+
+    @mcp.tool(
+        annotations=CREATE,
+        description=(
+            "Get Trilium's single day note for a date in the default calendar root. Omit date to "
+            "use the MCP server's current local date. Existing notes are returned as metadata. If "
+            "the date has no note, set confirm_create=true because Trilium will create one. This "
+            "does not return the note body; use get_note_content afterwards if needed."
+        ),
+    )
+    async def get_day_note(
+        date: str | None = None, confirm_create: bool = False
+    ) -> dict[str, Any]:
+        return await get_day_note_tool(
+            client,
+            date=date,
+            confirm_create=confirm_create,
+        )
+
+    @mcp.tool(
+        annotations=CREATE,
+        description=(
+            "Get Trilium's optional week note for an ISO week in the default calendar root. Omit "
+            "week to use the MCP server's current ISO week. Existing notes are returned as "
+            "metadata. If the week has no note, set confirm_create=true because Trilium will "
+            "create one. This does not return the note body; use get_note_content afterwards if "
+            "needed."
+        ),
+    )
+    async def get_week_note(
+        week: str | None = None, confirm_create: bool = False
+    ) -> dict[str, Any]:
+        return await get_week_note_tool(
+            client,
+            week=week,
+            confirm_create=confirm_create,
+        )
 
     @mcp.tool(
         annotations=READ_ONLY,

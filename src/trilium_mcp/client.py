@@ -73,6 +73,12 @@ class TriliumClient:
         response = await self._request("notes/" + note_id + "/content", accept="text/plain, */*")
         return response.text
 
+    async def get_day_note(self, date: str) -> dict[str, Any]:
+        return await self._get_json(f"calendar/days/{date}")
+
+    async def get_week_note(self, week: str) -> dict[str, Any]:
+        return await self._get_json(f"calendar/weeks/{week}")
+
     async def replace_note_content(self, note_id: str, content: str) -> None:
         await self._request(
             f"notes/{note_id}/content",

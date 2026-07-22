@@ -59,6 +59,32 @@ async def test_replace_note_content_sends_plain_text(settings: Settings) -> None
 
 @pytest.mark.anyio
 @respx.mock
+async def test_get_day_note_uses_calendar_endpoint(settings: Settings) -> None:
+    route = respx.get("https://notes.example.com/etapi/calendar/days/2026-07-22").mock(
+        return_value=httpx.Response(200, json={"noteId": "day", "title": "22 - Wednesday"})
+    )
+    client = TriliumClient(settings)
+
+    assert (await client.get_day_note("2026-07-22"))["noteId"] == "day"
+    assert route.called
+    await client.aclose()
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_get_week_note_uses_calendar_endpoint(settings: Settings) -> None:
+    route = respx.get("https://notes.example.com/etapi/calendar/weeks/2026-W30").mock(
+        return_value=httpx.Response(200, json={"noteId": "week", "title": "Week 30"})
+    )
+    client = TriliumClient(settings)
+
+    assert (await client.get_week_note("2026-W30"))["noteId"] == "week"
+    assert route.called
+    await client.aclose()
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_create_note_sends_text_note_payload(settings: Settings) -> None:
     route = respx.post("https://notes.example.com/etapi/create-note").mock(
         return_value=httpx.Response(201, json={"note": {}, "branch": {}})
